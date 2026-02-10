@@ -24,14 +24,14 @@ WITH classification AS (
               OR question_lc LIKE '%congress%' OR question_lc LIKE '%government shutdown%'
                 THEN 'Politics'
 
-            -- 3. Esports (New 18th Category)
+            -- 3. Esports
             WHEN array_position(tags_arr_lc, 'esports') > 0 
               OR question_lc LIKE '%lol:%' OR question_lc LIKE '%league of legends%' 
               OR question_lc LIKE '%valorant%' OR question_lc LIKE '%t1 %' 
               OR question_lc LIKE '%gen.g%' OR question_lc LIKE '%esports%'
                 THEN 'Esports'
 
-            -- 4. Sports (Traditional)
+            -- 4. Sports
             WHEN array_position(tags_arr_lc, 'sports') > 0 
               OR array_position(tags_arr_lc, 'nba') > 0 OR array_position(tags_arr_lc, 'nfl') > 0
               OR array_position(tags_arr_lc, 'mlb') > 0 OR array_position(tags_arr_lc, 'nhl') > 0
@@ -51,7 +51,7 @@ WITH classification AS (
               OR question_lc LIKE '%interest rate%' OR question_lc LIKE '%cpi%'
                 THEN 'Economics'
 
-            -- 7. World (Geopolitics)
+            -- 7. World
             WHEN array_position(tags_arr_lc, 'world') > 0 
               OR array_position(tags_arr_lc, 'geopolitics') > 0
               OR question_lc LIKE '%israel%' OR question_lc LIKE '%ukraine%' OR question_lc LIKE '%china%'
@@ -117,19 +117,52 @@ WITH classification AS (
             ELSE 'Unknown'
         END AS category
     FROM base
+),
+
+filtered_data AS (
+    SELECT 
+        m.question, 
+        m.tags,
+        p.amount
+    FROM polymarket_polygon.market_trades p
+    JOIN polymarket_polygon.market_details m 
+        ON CAST(p.condition_id AS VARCHAR) = m.condition_id
+    LEFT JOIN classification c 
+        ON c.condition_id = m.condition_id
+    WHERE c.category = 'Unknown' 
+      AND CASE 
+            -- Year Match
+            WHEN regexp_like(CAST('{{Timeframe}}' AS VARCHAR), '^[0-9]{4}$') 
+                THEN CAST(year(CAST(p.block_time AS TIMESTAMP)) AS VARCHAR) = CAST('{{Timeframe}}' AS VARCHAR)
+            
+            -- Rolling 365 Days
+            WHEN LOWER(CAST('{{Timeframe}}' AS VARCHAR)) = 'last 365 days' 
+                THEN CAST(p.block_time AS TIMESTAMP) >= NOW() - INTERVAL '365' DAY
+            
+            -- All Time
+            WHEN LOWER(CAST('{{Timeframe}}' AS VARCHAR)) = 'all time' 
+                THEN TRUE
+                
+            ELSE FALSE
+        END
 )
 
-SELECT 
-    m.question, 
-    m.tags,
-    SUM(p.amount) AS missed_volume
-FROM polymarket_polygon.market_trades p
-JOIN polymarket_polygon.market_details m 
-    ON CAST(p.condition_id AS VARCHAR) = m.condition_id
-LEFT JOIN classification c 
-    ON c.condition_id = m.condition_id
-WHERE c.category = 'Unknown' 
-  AND p.block_time >= DATE '2025-01-01'
-GROUP BY 1, 2
-ORDER BY 3 DESC
-LIMIT 100;
+-- Final Output: Summary Row + Detailed List
+(
+    SELECT 
+        '--- GRAND TOTAL UNKNOWN ---' AS question, 
+        'ALL TAGS' AS tags, 
+        SUM(amount) AS volume
+    FROM filtered_data
+)
+UNION ALL
+(
+    SELECT 
+        question, 
+        tags, 
+        SUM(amount) AS volume
+    FROM filtered_data
+    GROUP BY 1, 2
+    ORDER BY 3 DESC
+    LIMIT 100
+)
