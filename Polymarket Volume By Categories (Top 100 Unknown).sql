@@ -1,4 +1,4 @@
-WITH classification AS (
+WITH tags AS (
     WITH base AS (
         SELECT
             condition_id,
@@ -12,7 +12,11 @@ WITH classification AS (
         CASE
             -- 1. Elections
             WHEN array_position(tags_arr_lc, 'elections') > 0 
+              OR array_position(tags_arr_lc, 'us election') > 0
+              OR array_position(tags_arr_lc, 'midterms') > 0
+              OR array_position(tags_arr_lc, 'primaries') > 0
               OR array_position(tags_arr_lc, 'global elections') > 0
+              OR array_position(tags_arr_lc, 'mayoral elections') > 0
               OR question_lc LIKE '%election%' OR question_lc LIKE '%trump%' 
               OR question_lc LIKE '%biden%' OR question_lc LIKE '%kamala%' OR question_lc LIKE '%polls%'
                 THEN 'Elections'
@@ -20,6 +24,10 @@ WITH classification AS (
             -- 2. Politics
             WHEN array_position(tags_arr_lc, 'politics') > 0 
               OR array_position(tags_arr_lc, 'us politics') > 0
+              OR array_position(tags_arr_lc, 'trump') > 0
+              OR array_position(tags_arr_lc, 'epstein') > 0
+              OR array_position(tags_arr_lc, 'venezuela') > 0
+              OR array_position(tags_arr_lc, 'congress') > 0
               OR question_lc LIKE '%white house%' OR question_lc LIKE '%senate%' 
               OR question_lc LIKE '%congress%' OR question_lc LIKE '%government shutdown%'
                 THEN 'Politics'
@@ -119,49 +127,43 @@ WITH classification AS (
     FROM base
 ),
 
-filtered_data AS (
-    SELECT 
-        m.question, 
-        m.tags,
+filtered_unknowns AS (
+    SELECT
+        m.question,
+        m.tags AS original_tags,
         p.amount
     FROM polymarket_polygon.market_trades p
-    JOIN polymarket_polygon.market_details m 
-        ON CAST(p.condition_id AS VARCHAR) = m.condition_id
-    LEFT JOIN classification c 
-        ON c.condition_id = m.condition_id
-    WHERE c.category = 'Unknown' 
+    JOIN polymarket_polygon.market_details m
+      ON CAST(p.condition_id AS VARCHAR) = m.condition_id
+    JOIN tags t
+      ON t.condition_id = m.condition_id
+    WHERE t.category = 'Unknown'
       AND CASE 
-            -- Year Match
             WHEN regexp_like(CAST('{{Timeframe}}' AS VARCHAR), '^[0-9]{4}$') 
                 THEN CAST(year(CAST(p.block_time AS TIMESTAMP)) AS VARCHAR) = CAST('{{Timeframe}}' AS VARCHAR)
-            
-            -- Rolling 365 Days
             WHEN LOWER(CAST('{{Timeframe}}' AS VARCHAR)) = 'last 365 days' 
                 THEN CAST(p.block_time AS TIMESTAMP) >= NOW() - INTERVAL '365' DAY
-            
-            -- All Time
             WHEN LOWER(CAST('{{Timeframe}}' AS VARCHAR)) = 'all time' 
                 THEN TRUE
-                
             ELSE FALSE
         END
 )
 
--- Final Output: Summary Row + Detailed List
+-- Final Output: Summary Total + Top 100 List
 (
     SELECT 
-        '--- GRAND TOTAL UNKNOWN ---' AS question, 
-        'ALL TAGS' AS tags, 
+        '--- GRAND TOTAL UNKNOWN VOLUME ---' AS question, 
+        'ALL TAGS' AS original_tags, 
         SUM(amount) AS volume
-    FROM filtered_data
+    FROM filtered_unknowns
 )
 UNION ALL
 (
     SELECT 
         question, 
-        tags, 
+        original_tags, 
         SUM(amount) AS volume
-    FROM filtered_data
+    FROM filtered_unknowns
     GROUP BY 1, 2
     ORDER BY 3 DESC
     LIMIT 100
