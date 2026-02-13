@@ -8,6 +8,11 @@ The suite is designed for analysts and researchers to observe how event-based tr
 
 ---
 
+## :camera_flash: Snapshot 
+<img width="3734" height="4529" alt="image" src="https://github.com/user-attachments/assets/449ae1ae-7891-48b4-87ca-a8f2b41ae18e" />
+
+---
+
 ## 🔍 Query Breakdown
 
 ### 1. Kalshi Volume By Market Categories
@@ -59,8 +64,3 @@ Pits the two platforms against each other within specific market niches.
 
 * **Polymarket:** `polymarket_polygon.market_trades` & `polymarket_polygon.market_details`
 * **Kalshi:** `kalshi.trade_report` & `kalshi.market_report`
-
----
-
-## :camera_flash: Snapshot 
-<img width="3734" height="4529" alt="image" src="https://github.com/user-attachments/assets/449ae1ae-7891-48b4-87ca-a8f2b41ae18e" />
